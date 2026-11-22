@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/gameoflife-social-preview.png" alt="Game of Life logo with a five-cell glider" width="1040" />
+</div>
+
 # Game of Life
 
 A Conway's Game of Life simulator built with Blazor WebAssembly, C# and a JavaScript canvas.
