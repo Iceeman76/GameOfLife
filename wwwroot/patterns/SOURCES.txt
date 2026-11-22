@@ -1,0 +1,4 @@
+Advanced pattern catalog: https://www.gameoflifelab.com/advanced
+Pattern files: https://www.gameoflifelab.com/infinite-life/examples/
+Original collection: https://copy.sh/life/examples/
+Original author and pattern attribution is retained in each RLE file.

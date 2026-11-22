@@ -1,0 +1,8 @@
+title = "GameOfLife secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local generated files and IDE metadata"
+paths = ['''(^|/)(bin|obj|\.git|\.idea|\.vs)(/|$)''']

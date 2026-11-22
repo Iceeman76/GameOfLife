@@ -1,0 +1,147 @@
+@page "/"
+@implements IDisposable
+
+<PageTitle>Game of Life · DotNetLab</PageTitle>
+
+<main>
+    <section class="intro" aria-labelledby="page-title">
+        <h1 id="page-title">Game of <span>Life</span></h1>
+        <p>Explore Conway’s Game of Life. Draw your own pattern or load a preset, then see how it evolves.</p>
+    </section>
+
+    <section @ref="simulationPanel" class="simulation" aria-labelledby="simulation-title">
+        <div class="simulation-header">
+            <h2 id="simulation-title">Simulation</h2>
+            <div class="simulation-header-actions">
+                <button type="button" class="action" data-fullscreen-toggle @onclick="ToggleFullscreenAsync" disabled="@(boardModule is null)">Fullscreen</button>
+                <span class="simulation-status" data-running="@(IsRunning ? "true" : "false")">
+                <span class="status-dot" aria-hidden="true"></span>
+                @(IsRunning ? "Running" : "Paused")
+                </span>
+            </div>
+        </div>
+
+        <div class="simulation-body">
+            <div class="board-panel">
+                <div class="board-space" style="--columns: @board.Columns; --rows: @board.Rows">
+                    <canvas @ref="boardCanvas" class="board" role="img" aria-label="Cell grid"></canvas>
+                </div>
+                @if (renderingError is not null)
+                {
+                    <p role="alert">@renderingError</p>
+                }
+                @if (fullscreenError is not null)
+                {
+                    <p role="alert">@fullscreenError</p>
+                }
+            </div>
+
+            <div class="controls">
+                <dl class="metrics">
+                    <div>
+                        <dt>Generation</dt>
+                        <dd id="generation">@board.Generation</dd>
+                    </div>
+                    <div>
+                        <dt>Live cells</dt>
+                        <dd id="population" title="All live cells, including cells outside the visible view">@board.Population</dd>
+                    </div>
+                    <div>
+                        <dt>Visible</dt>
+                        <dd id="visible-population" title="Live cells inside the current view">@VisibleCells</dd>
+                    </div>
+                </dl>
+
+                <div class="buttons">
+                    <button type="button" class="action primary" @onclick="ToggleRunningAsync">@(IsRunning ? "Pause" : "Start")</button>
+                    <button type="button" class="action" @onclick="Advance" disabled="@IsRunning">Step</button>
+                    <button type="button" class="action" @onclick="Reset">Reset</button>
+                    <button type="button" class="action" @onclick="Randomize">Randomize</button>
+                    <button type="button" class="action" @onclick="Clear">Clear</button>
+                </div>
+
+                <div class="field">
+                    <div class="field-heading">
+                        <label for="speed">Speed</label>
+                        <output for="speed">@speed gen/s</output>
+                    </div>
+                    <input id="speed" type="range" min="1" max="60" @bind="speed" @bind:event="oninput" @bind:after="UpdateSpeed" />
+                </div>
+
+                <div class="field">
+                    <label for="grid-size">Grid size</label>
+                    <select id="grid-size" @bind="gridSize" @bind:after="ResizeGrid" aria-describedby="grid-size-help">
+                        @if (IsCustomGridSize)
+                        {
+                            <option value="@gridSize">@board.Columns × @board.Rows (imported)</option>
+                        }
+                        @foreach (var size in GridSize.Presets)
+                        {
+                            <option value="@size.Value">@size.Columns × @size.Rows</option>
+                        }
+                    </select>
+                    <p id="grid-size-help">Resizing pauses and resets the generation. @(board.WrapEdges ? "Cells outside the new grid are cropped." : "Cells outside the new view continue evolving.")</p>
+                </div>
+
+                <div class="field">
+                    <label for="wrap-edges">Edges</label>
+                    <label class="toggle-field">
+                        <input id="wrap-edges" type="checkbox" @bind="board.WrapEdges" />
+                        <span>Wrap edges</span>
+                    </label>
+                    <p class="field-help">@(board.WrapEdges ? "Patterns crossing an edge continue on the opposite side." : "Life continues beyond the grid. Auto grow keeps all live cells in view. Wrapping keeps only cells inside the selected grid.")</p>
+                </div>
+
+                <div class="field">
+                    <label class="toggle-field">
+                        <input id="show-grid" type="checkbox" @bind="showGrid" />
+                        <span>Show grid</span>
+                    </label>
+                    <label class="toggle-field">
+                        <input id="auto-grow" type="checkbox" @bind="autoGrow" disabled="@board.WrapEdges" />
+                        <span>Auto grow</span>
+                    </label>
+                    <p class="field-help">The view expands when needed and keeps its largest extent until a new pattern is loaded or the grid is reset.</p>
+                    <output class="field-help" data-view-size>View: @board.Columns × @board.Rows</output>
+                </div>
+
+                <div class="field">
+                    <label for="pattern">Pattern</label>
+                    <select id="pattern" @bind="patternIndex" @bind:after="LoadPatternAsync">
+                        @foreach (var category in Pattern.Presets.Select((pattern, index) => (Pattern: pattern, Index: index)).GroupBy(item => item.Pattern.Category))
+                        {
+                            <optgroup label="@category.Key">
+                                @foreach (var item in category)
+                                {
+                                    <option value="@item.Index">@item.Pattern.Name</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                </div>
+
+                <div class="field">
+                    <span class="field-label">Files</span>
+                    <div class="buttons">
+                        <label class="action file-picker">
+                            Load .rle
+                            <Microsoft.AspNetCore.Components.Forms.InputFile OnChange="LoadFileAsync" accept=".rle,text/plain" aria-label="Load RLE file" />
+                        </label>
+                        <button type="button" class="action" @onclick="SaveFile" disabled="@(boardModule is null)">Save .rle</button>
+                    </div>
+                    <p class="field-help">Save the grid, generation and edge setting, or load an RLE pattern.</p>
+                    @if (fileStatus is not null)
+                    {
+                        <p class="field-help" role="@(fileFailed ? "alert" : "status")">@fileStatus</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <details class="rules">
+        <summary>How the game works</summary>
+        <p>Each cell has eight neighbors. A live cell survives with two or three live neighbors. A dead cell becomes alive with exactly three. All cells update at the same time. Enable Wrap edges to connect opposite edges. Otherwise, the visible grid is a window into an unbounded simulation.</p>
+    </details>
+</main>
+
